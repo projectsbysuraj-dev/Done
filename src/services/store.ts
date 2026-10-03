@@ -327,19 +327,10 @@ export function verifyAdminLogin(email: string, pass: string): { success: boolea
   const cleanEmail = email.trim().toLowerCase();
   const cleanPass = pass.trim();
 
-  // Primary check against saved credentials
+  // Strictly check against the current active saved credentials only!
   if (
     cleanEmail === current.email.toLowerCase() &&
     cleanPass === current.password
-  ) {
-    setAdminLoggedIn(true);
-    return { success: true };
-  }
-
-  // Backup check against original adminrohit credentials in case of any reset
-  if (
-    cleanEmail === 'adminrohit@gmail.com' &&
-    cleanPass === 'adminrohit10'
   ) {
     setAdminLoggedIn(true);
     return { success: true };
@@ -350,7 +341,7 @@ export function verifyAdminLogin(email: string, pass: string): { success: boolea
 
 export function updateAdminPassword(currentPass: string, newPass: string): { success: boolean; error?: string } {
   const current = getAdminCredentials();
-  if (currentPass.trim() !== current.password && currentPass.trim() !== 'adminrohit10') {
+  if (currentPass.trim() !== current.password) {
     return { success: false, error: 'Current password is incorrect!' };
   }
   if (!newPass.trim() || newPass.trim().length < 4) {
@@ -364,6 +355,7 @@ export function updateAdminPassword(currentPass: string, newPass: string): { suc
   };
 
   saveAdminCredentials(updated);
+  saveSettings({ adminPassword: newPass.trim() });
   return { success: true };
 }
 
@@ -379,6 +371,7 @@ export function updateAdminEmail(newEmail: string): { success: boolean; error?: 
     updatedAt: Date.now(),
   };
   saveAdminCredentials(updated);
+  saveSettings({ adminEmail: clean });
   return { success: true };
 }
 

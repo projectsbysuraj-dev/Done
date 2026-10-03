@@ -111,6 +111,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
             <ExternalLink className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
           </button>
+
+          {/* Action 5: Contact for cheap bot website app creation */}
+          <button
+            onClick={() => openExternalOrTelegramLink('https://t.me/lakhsmiiii')}
+            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors group"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-lg shrink-0">🚀</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 truncate">
+                  Contact for cheap bot website app creation
+                </span>
+                <span className="text-[11px] font-bold text-sky-600">
+                  @lakhsmiiii
+                </span>
+              </div>
+            </div>
+            <ExternalLink className="w-4 h-4 text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+          </button>
         </div>
       </div>
 

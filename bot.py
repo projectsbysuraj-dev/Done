@@ -41,10 +41,10 @@ from telegram.ext import (
 # -------------------------------------------------------------------------
 # 1. CORE BOT CONFIGURATION
 # -------------------------------------------------------------------------
-TOKEN = "8639853090:AAGSrArc6Xtm5309WpZeGih1H7evsvJstWE"
-BOT_USERNAME = "Giveaway_by_rohit_bot"
-WEB_URL = "https://cashback-psi-fawn.vercel.app/"
-RTDB_URL = "https://telebot-26c11-default-rtdb.firebaseio.com"
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8639853090:AAGSrArc6Xtm5309WpZeGih1H7evsvJstWE")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "Giveaway_by_rohit_bot")
+WEB_URL = os.environ.get("WEB_URL", "https://cashback-psi-fawn.vercel.app/")
+RTDB_URL = os.environ.get("RTDB_URL", "https://telebot-26c11-default-rtdb.firebaseio.com")
 
 # -------------------------------------------------------------------------
 # 2. PERMANENT CHANNELS (Public & Private Dono Yahan Code Me Set Kar Sakte Hain)

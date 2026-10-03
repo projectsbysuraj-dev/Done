@@ -66,6 +66,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // Standalone HTML code state
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedItemKey, setCopiedItemKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedItemKey(key);
+    triggerHaptic('light');
+    setTimeout(() => {
+      setCopiedItemKey((prev) => (prev === key ? null : prev));
+    }, 2000);
+  };
 
   // Real-time synchronization
   React.useEffect(() => {
@@ -354,15 +365,109 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         <span>{w.method === 'upi' ? '⚡ UPI Transfer' : '🏦 Bank Transfer'}</span>
                       </div>
                       {w.method === 'upi' ? (
-                        <div className="font-mono text-slate-800 font-bold select-all bg-sky-50 px-2 py-1 rounded border border-sky-100">
-                          UPI ID: {w.upiId}
+                        <div className="font-mono text-slate-800 font-bold bg-sky-50 px-2.5 py-1.5 rounded border border-sky-100 flex items-center justify-between gap-2">
+                          <span className="select-all truncate">UPI ID: {w.upiId}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(w.upiId || '', `modal_upi_${w.id}`)}
+                            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all border ${
+                              copiedItemKey === `modal_upi_${w.id}`
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : 'bg-white hover:bg-slate-100 text-sky-700 border-sky-200'
+                            }`}
+                            title="Copy UPI ID"
+                          >
+                            {copiedItemKey === `modal_upi_${w.id}` ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                       ) : (
-                        <div className="space-y-0.5 text-[11px] text-slate-700">
-                          <div>A/C Holder: <strong>{w.accountHolder}</strong></div>
-                          <div>A/C Number: <strong className="font-mono">{w.accountNumber}</strong></div>
-                          <div>IFSC: <strong className="font-mono">{w.ifsc}</strong></div>
-                          {w.bankName && <div>Bank: {w.bankName}</div>}
+                        <div className="space-y-1.5">
+                          <div className="space-y-0.5 text-[11px] text-slate-700 bg-slate-50 p-2 rounded border border-slate-200">
+                            <div>A/C Holder: <strong>{w.accountHolder}</strong></div>
+                            <div>A/C Number: <strong className="font-mono select-all">{w.accountNumber}</strong></div>
+                            <div>IFSC: <strong className="font-mono select-all">{w.ifsc}</strong></div>
+                            {w.bankName && <div>Bank: {w.bankName}</div>}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(w.accountNumber || '', `modal_acc_${w.id}`)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `modal_acc_${w.id}`
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {copiedItemKey === `modal_acc_${w.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>A/C Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy A/C</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(w.ifsc || '', `modal_ifsc_${w.id}`)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `modal_ifsc_${w.id}`
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {copiedItemKey === `modal_ifsc_${w.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>IFSC Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy IFSC</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const details = `Bank: ${w.bankName || 'N/A'}\nA/C Number: ${w.accountNumber}\nIFSC: ${w.ifsc}\nA/C Holder: ${w.accountHolder}`;
+                                handleCopyText(details, `modal_bank_all_${w.id}`);
+                              }}
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `modal_bank_all_${w.id}`
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
+                              }`}
+                            >
+                              {copiedItemKey === `modal_bank_all_${w.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>All Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy All</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
                       )}
                       {w.rejectReason && (

@@ -108,6 +108,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Standalone code state
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedItemKey, setCopiedItemKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedItemKey(key);
+    triggerHaptic('light');
+    setTimeout(() => {
+      setCopiedItemKey((prev) => (prev === key ? null : prev));
+    }, 2000);
+  };
 
   useEffect(() => {
     // 1. Initial live fetch directly from Firebase Realtime Database
@@ -828,15 +839,117 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         <strong className="text-white">{item.userName}</strong> (User #{item.userId})
                       </div>
 
-                      <div className="text-xs font-mono text-sky-300 bg-sky-950/40 border border-sky-800/40 px-3 py-1.5 rounded-xl inline-block">
-                        {item.method === 'upi' ? (
-                          <span>UPI ID: <strong>{item.upiId}</strong></span>
-                        ) : (
-                          <span>
-                            Bank: <strong>{item.bankName}</strong> | A/C: <strong>{item.accountNumber}</strong> | IFSC: <strong>{item.ifsc}</strong> | Name: <strong>{item.accountHolder}</strong>
-                          </span>
-                        )}
-                      </div>
+                      {item.method === 'upi' ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="text-xs font-mono text-sky-300 bg-sky-950/40 border border-sky-800/40 px-3 py-1.5 rounded-xl inline-flex items-center gap-2">
+                            <span>UPI ID: <strong className="text-white select-all">{item.upiId}</strong></span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(item.upiId || '', `upi_${item.id}`)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                              copiedItemKey === `upi_${item.id}`
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-slate-700 hover:border-sky-500/50'
+                            } active:scale-95 cursor-pointer`}
+                            title="Copy UPI ID"
+                          >
+                            {copiedItemKey === `upi_${item.id}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy UPI</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="text-xs font-mono text-sky-300 bg-sky-950/40 border border-sky-800/40 px-3 py-2 rounded-xl flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3 flex-wrap">
+                            <span>Bank: <strong className="text-white">{item.bankName || 'N/A'}</strong></span>
+                            <span>A/C: <strong className="text-white select-all">{item.accountNumber}</strong></span>
+                            <span>IFSC: <strong className="text-white select-all">{item.ifsc}</strong></span>
+                            <span>Name: <strong className="text-white">{item.accountHolder}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(item.accountNumber || '', `acc_${item.id}`)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `acc_${item.id}`
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-slate-600'
+                              } active:scale-95 cursor-pointer`}
+                              title="Copy Account Number"
+                            >
+                              {copiedItemKey === `acc_${item.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span>A/C Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy A/C No</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(item.ifsc || '', `ifsc_${item.id}`)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `ifsc_${item.id}`
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-slate-600'
+                              } active:scale-95 cursor-pointer`}
+                              title="Copy IFSC Code"
+                            >
+                              {copiedItemKey === `ifsc_${item.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span>IFSC Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy IFSC</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const details = `Bank: ${item.bankName || 'N/A'}\nA/C Number: ${item.accountNumber}\nIFSC: ${item.ifsc}\nA/C Holder: ${item.accountHolder}`;
+                                handleCopyText(details, `bank_all_${item.id}`);
+                              }}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                                copiedItemKey === `bank_all_${item.id}`
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-slate-700 hover:border-sky-500/50'
+                              } active:scale-95 cursor-pointer`}
+                              title="Copy All Bank Details"
+                            >
+                              {copiedItemKey === `bank_all_${item.id}` ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span>All Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy All Details</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="text-[11px] text-slate-500">
                         Created: {new Date(item.createdAt).toLocaleString()}
@@ -1035,7 +1148,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     required
                     value={currentPassInput}
                     onChange={(e) => setCurrentPassInput(e.target.value)}
-                    placeholder="Enter current password (adminrohit10)"
+                    placeholder="Enter current password"
                     className="w-full bg-slate-800 border border-slate-700 text-sm p-3 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
                   />
                 </div>
