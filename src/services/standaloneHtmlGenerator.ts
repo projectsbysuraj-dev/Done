@@ -672,10 +672,10 @@ export function generateStandaloneHtml(): string {
             <span class="text-xs font-bold text-slate-700">💬 Official Telegram Channel</span>
             <span class="text-slate-400 text-sm">›</span>
           </button>
-          <button onclick="window.open('https://t.me/lakhsmiiii', '_blank')" class="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50 rounded-2xl">
+          <button onclick="window.open('https://t.me/lakhsmiiiii', '_blank')" class="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50 rounded-2xl">
             <div class="flex flex-col">
               <span class="text-xs font-bold text-slate-700">🚀 Contact for cheap bot website app creation</span>
-              <span class="text-[11px] font-semibold text-sky-600">@lakhsmiiii</span>
+              <span class="text-[11px] font-semibold text-sky-600">@lakhsmiiiii</span>
             </div>
             <span class="text-slate-400 text-sm">›</span>
           </button>

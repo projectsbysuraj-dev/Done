@@ -114,7 +114,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           {/* Action 5: Contact for cheap bot website app creation */}
           <button
-            onClick={() => openExternalOrTelegramLink('https://t.me/lakhsmiiii')}
+            onClick={() => openExternalOrTelegramLink('https://t.me/lakhsmiiiii')}
             className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors group"
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -124,7 +124,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   Contact for cheap bot website app creation
                 </span>
                 <span className="text-[11px] font-bold text-sky-600">
-                  @lakhsmiiii
+                  @lakhsmiiiii
                 </span>
               </div>
             </div>
