@@ -2,15 +2,20 @@
 Telegram Bot for Rohit Giveaway Mini App
 Features:
 - Strict Channel Gatekeeper: NO Giveaway App link until ALL channels are joined!
-- Public & Private Channels support (both in permanent code & dynamic /addchannel)
+- Public & Private Channels support (VIP1 Private Channel permanently set)
+- Private Channel Join Request check: User sends request, bot verifies WITHOUT auto-accepting!
+- Device verification check: Ek device me sirf ek hi account allow hai
+- Congratulations message + Open button only after successful Device Verification
+- If Device verification fails: Done button only, website does NOT open!
 - Owner-only /ownerhelp, /addchannel, /removechannel, /channels, /owners, /addowner, /delowner
 - Instant 1-Second Referral Tracking & Notification to Referrer
 - Dynamic /invite, /link, /referral commands (gatekept by channel verification)
 - Real-time +1 Free Spin credit in Firebase Realtime Database
-- Safe Callback Queries (completely prevents "BadRequest: Message is not modified")
+- Pure message broadcast (No mini app link attached with broadcasts)
 - Resilience against mobile network/Termux drops (handles ReadError/TimedOut gracefully)
 - Admin commands: /withdrawals, /payouts, /broadcast, /owners, /addowner, /delowner
 - User status commands: /spins, /balance, /invite
+- Built-in Render HTTP health-check server for 24/7 uptime on Render.com
 """
 
 import os
@@ -22,6 +27,7 @@ import time
 import re
 import urllib.request
 import urllib.error
+import urllib.parse
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -41,16 +47,14 @@ from telegram.ext import (
 # -------------------------------------------------------------------------
 # 1. CORE BOT CONFIGURATION
 # -------------------------------------------------------------------------
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8639853090:AAGSrArc6Xtm5309WpZeGih1H7evsvJstWE")
-BOT_USERNAME = os.environ.get("BOT_USERNAME", "Giveaway_by_rohit_bot")
-WEB_URL = os.environ.get("WEB_URL", "https://cashback-psi-fawn.vercel.app/")
-RTDB_URL = os.environ.get("RTDB_URL", "https://telebot-26c11-default-rtdb.firebaseio.com")
+TOKEN = "8973201055:AAGiHa1ewSL0F_mG0v_f1WpMqK2lRySxSko"
+BOT_USERNAME = "spin_the_win_bot"
+WEB_URL = "https://done-coral-delta.vercel.app/"
+RTDB_URL = "https://telebot-26c11-default-rtdb.firebaseio.com"
 
 # -------------------------------------------------------------------------
-# 2. PERMANENT CHANNELS (Public & Private Dono Yahan Code Me Set Kar Sakte Hain)
+# 2. PERMANENT CHANNELS (VIP1 Private Channel Configured)
 # -------------------------------------------------------------------------
-# Public Channel ke liye: id = "@channelusername", url = "https://t.me/channelusername"
-# Private Channel ke liye: id = "-100xxxxxxxxxx", url = "https://t.me/+xxxxxx"
 PERMANENT_CHANNELS = [
     {
         "id": "-1003479783999",
@@ -63,12 +67,8 @@ PERMANENT_CHANNELS = [
 # -------------------------------------------------------------------------
 # 3. PERMANENT OWNERS (Only Ye ID / Username /ownerhelp Chala Sakte Hain)
 # -------------------------------------------------------------------------
-# Yahan apna Telegram numeric User ID ya username bina '@' ke likhein:
 DEFAULT_OWNERS = [
-    "sauravsanganya",
-    "rohit",
-    "adminrohit",
-    "ravikumar",
+    "rohit79041",
 ]
 
 # ----------------- Logging Setup -----------------
@@ -244,21 +244,16 @@ _LAST_SYNC_TIME = 0
 
 
 def load_channels_from_db() -> list[dict]:
-    """
-    Combines permanent channels from code with dynamic channels
-    stored in Firebase Realtime Database.
-    """
+    """Combines permanent channels from code with dynamic channels from Firebase."""
     global _CHANNELS_CACHE, _LAST_SYNC_TIME
     now = time.time()
     if _CHANNELS_CACHE and (now - _LAST_SYNC_TIME < 15):
         return _CHANNELS_CACHE
 
     combined = []
-    # 1. Add permanent channels from code
     for p in PERMANENT_CHANNELS:
         combined.append(dict(p))
 
-    # 2. Add dynamic channels from Firebase RTDB
     try:
         req = urllib.request.Request(f"{RTDB_URL}/bot_config/channels.json")
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -268,7 +263,6 @@ def load_channels_from_db() -> list[dict]:
                 items = list(parsed.values()) if isinstance(parsed, dict) else parsed
                 for item in items:
                     if isinstance(item, dict) and item.get("id"):
-                        # Avoid duplicates
                         if not any(c.get("id") == item["id"] for c in combined):
                             combined.append(item)
     except Exception as e:
@@ -294,7 +288,6 @@ def save_channel_to_db(channel_info: dict) -> bool:
         with urllib.request.urlopen(req, timeout=5):
             pass
 
-        # Update cache
         existing = [c for c in _CHANNELS_CACHE if str(c.get("id")) != str(channel_info["id"])]
         existing.append(channel_info)
         _CHANNELS_CACHE = existing
@@ -391,10 +384,7 @@ def delete_owner_from_db(identifier: str) -> bool:
 
 
 def is_owner(user_id: int | str, username: str | None = None) -> bool:
-    """
-    STRICT OWNER AUTHENTICATION:
-    Only returns True if user's Telegram ID or username is in the saved owner list!
-    """
+    """STRICT OWNER AUTHENTICATION."""
     owners = load_owners_from_db()
     uid_str = str(user_id).strip()
 
@@ -416,10 +406,7 @@ async def process_and_notify_referral(
     new_user_name: str,
     new_user_username: str,
 ):
-    """
-    Processes referral within 1 second and immediately sends a Telegram
-    notification to the referrer with their updated spin count.
-    """
+    """Processes referral and sends Telegram notification to the referrer."""
     clean_ref = str(referrer_id).replace("ref_", "").strip()
     clean_new_user = str(new_user_id).strip()
 
@@ -470,10 +457,7 @@ async def process_and_notify_referral(
 
 # ----------------- Keyboard Builders -----------------
 def build_success_keyboard(referrer_id: str | None = None) -> InlineKeyboardMarkup:
-    """
-    CRITICAL: ONLY called after 100% successful verification across ALL channels!
-    Gives the user the 'Open Reward App' button (Matching Screenshot 4).
-    """
+    """ONLY called after 100% successful verification across ALL channels & device!"""
     app_url = WEB_URL
     if referrer_id:
         clean_ref = str(referrer_id).replace("ref_", "").strip()
@@ -483,7 +467,7 @@ def build_success_keyboard(referrer_id: str | None = None) -> InlineKeyboardMark
     keyboard = [
         [
             InlineKeyboardButton(
-                "🎁 Open Reward App",
+                "🚀 Open",
                 web_app=WebAppInfo(url=app_url),
             )
         ]
@@ -492,15 +476,10 @@ def build_success_keyboard(referrer_id: str | None = None) -> InlineKeyboardMark
 
 
 def build_channel_join_keyboard(channels: list[dict], referrer_id: str | None = None) -> InlineKeyboardMarkup:
-    """
-    GATEKEEPER KEYBOARD (Matching Screenshot 1):
-    Grid of 2 columns of 'Join ↗' buttons for all channels,
-    with a full-width '🟢 Claim' button at the bottom!
-    """
+    """GATEKEEPER KEYBOARD: Grid of join buttons + Claim button."""
     callback_data = f"claim_{referrer_id}" if referrer_id else "claim_none"
     keyboard = []
 
-    # Format channels in 2 columns
     row = []
     for ch in channels:
         url = ch.get("url")
@@ -516,7 +495,6 @@ def build_channel_join_keyboard(channels: list[dict], referrer_id: str | None = 
     if row:
         keyboard.append(row)
 
-    # Bottom Claim button (Matching Screenshot 1)
     keyboard.append([
         InlineKeyboardButton("🟢 Claim", callback_data=callback_data)
     ])
@@ -525,12 +503,11 @@ def build_channel_join_keyboard(channels: list[dict], referrer_id: str | None = 
 
 
 def build_join_keyboard(missing_channels: list[dict], referrer_id: str | None = None) -> InlineKeyboardMarkup:
-    """Backward compatibility alias for channel join keyboard."""
     return build_channel_join_keyboard(missing_channels, referrer_id)
 
 
 def build_invite_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    """Build keyboard for sharing referral link with 1 click."""
+    """Build keyboard for sharing referral link."""
     ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
     share_text = f"🎁 Join Rohit Giveaway! Spin the Lucky Wheel to win instant real cash directly into your UPI/Bank Account! Use my link: {ref_link}"
     share_url = f"https://t.me/share/url?url={ref_link}&text={urllib.parse.quote(share_text)}"
@@ -540,16 +517,13 @@ def build_invite_keyboard(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📲 Share Link with Friends (1 Click)", url=share_url),
         ],
         [
-            InlineKeyboardButton("🎁 Open Reward App", web_app=WebAppInfo(url=f"{WEB_URL}?start=ref_{user_id}")),
+            InlineKeyboardButton("🚀 Open", web_app=WebAppInfo(url=f"{WEB_URL}?start=ref_{user_id}")),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def build_owner_panel_keyboard() -> InlineKeyboardMarkup:
-    """
-    Interactive control panel keyboard for authorized owners.
-    """
     keyboard = [
         [
             InlineKeyboardButton("📢 Active Channels", callback_data="owner_channels"),
@@ -701,7 +675,7 @@ async def check_user_channels_membership(bot, user_id: int) -> tuple[bool, list[
 # ----------------- Command Handlers -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Handle /start command matching Screenshot 1:
+    Handle /start command matching:
     👋 Hey There User Welcome To Bot !
     🛑 Must Join Total Channel To Use Our Bot
     💣 After Joining Click Claim
@@ -727,12 +701,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if db_user and db_user.get("deviceBlocked"):
             await update.message.reply_html(
                 "❌ <b>Device Verification Failed!</b>\n\n"
-                "Ek device me sirf ek hi account ho sakta hai. Multiple accounts allowed nahi hain! 🚫"
+                "Ek device me sirf ek hi account ho sakta hai. Multiple accounts allowed nahi hain! 🚫",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Done", callback_data="device_blocked_done")]
+                ]),
             )
             return
 
         if db_user and (db_user.get("deviceVerified") or db_user.get("isVerified")):
-            # Already verified -> Show Congratulations message directly (Matching Screenshot 4)
+            # Already verified -> Show Congratulations message directly
             if referrer_id:
                 await process_and_notify_referral(
                     context.bot,
@@ -770,7 +747,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # Not all joined -> Show mandatory channels in 2 columns + Claim button (Matching Screenshot 1)
+    # Not all joined -> Show mandatory channels in 2 columns + Claim button
     welcome_text = (
         f"👋 <b>Hey There {first_name} Welcome To Bot !</b>\n\n"
         "🛑 <b>Must Join Total Channel To Use Our Bot</b>\n\n"
@@ -785,7 +762,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def claim_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles click on '🟢 Claim' button.
-    Shows Device Verification with 'Done' button (NOT opening mini app).
+    If NOT joined: Rejects immediately and says 'Pehle channel join karo'! No next step.
+    If ALL joined: THEN provides Device Verification!
     """
     query = update.callback_query
     if not query or not query.from_user:
@@ -840,7 +818,7 @@ async def done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles click on 'Done' button for Device Verification.
     Checks channel membership. If not joined, asks user to join first.
-    If all joined, provides Device Verification.
+    If all joined, verifies device status.
     """
     query = update.callback_query
     if not query or not query.from_user:
@@ -887,7 +865,10 @@ async def done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ Ek device me sirf ek hi account ho sakta hai!", show_alert=True)
         await query.message.reply_html(
             "❌ <b>Device Verification Failed!</b>\n\n"
-            "Ek device me sirf ek hi account ho sakta hai. Multiple accounts allowed nahi hain! 🚫"
+            "Ek device me sirf ek hi account ho sakta hai. Multiple accounts allowed nahi hain! 🚫",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Done", callback_data="device_blocked_done")]
+            ]),
         )
         return
 
@@ -914,9 +895,22 @@ async def done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 verify_callback = done_callback
 
 
+async def device_blocked_done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handles click on Done button when device verification has failed.
+    Alerts user and does NOT open website!
+    """
+    query = update.callback_query
+    if query:
+        await query.answer(
+            "❌ Device verification fail ho chuka hai! Ek device me sirf 1 account allowed hai.",
+            show_alert=True,
+        )
+
+
 async def complete_verification(query, context, user_id, first_name, username, referrer_id):
     """
-    Sends Screenshot 4 Congratulations & Open Reward App button,
+    Sends Congratulations & Open button,
     and awards referrer instant spin & notification.
     """
     await query.answer("✅ Verification Successful!", show_alert=False)
@@ -951,7 +945,7 @@ check_membership = verify_callback
 async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     /invite command:
-    User must be joined in all channels to get invite link or open app!
+    Gatekept by mandatory channel verification.
     """
     if not update.effective_user or not update.message:
         return
@@ -959,7 +953,6 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     first_name = update.effective_user.first_name or "Friend"
 
-    # Check channels first!
     all_joined, missing_channels = await check_user_channels_membership(context.bot, user_id)
     if not all_joined:
         await update.message.reply_html(
@@ -989,68 +982,6 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text,
         reply_markup=build_invite_keyboard(user_id),
     )
-
-
-async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Callback query handler for 'Verify' button.
-    Only reveals 'Open Giveaway App' if 100% of channels are joined!
-    """
-    query = update.callback_query
-    if not query or not query.from_user:
-        return
-
-    user_id = query.from_user.id
-    first_name = query.from_user.first_name or "Friend"
-    username = query.from_user.username or ""
-
-    referrer_id = None
-    if query.data and query.data.startswith("check_"):
-        ref_val = query.data.replace("check_", "").strip()
-        if ref_val and ref_val != "none":
-            referrer_id = ref_val
-
-    all_joined, missing_channels = await check_user_channels_membership(context.bot, user_id)
-
-    if all_joined:
-        await query.answer("✅ Verification successful! Welcome to the Giveaway!", show_alert=False)
-
-        if referrer_id:
-            await process_and_notify_referral(
-                context.bot,
-                referrer_id,
-                user_id,
-                first_name,
-                username,
-            )
-
-        ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
-        success_text = (
-            f"✅ <b>Verification Successful!</b>\n\n"
-            f"Welcome to Rohit Giveaway, {first_name}! Your account is verified.\n"
-            "🎁 <b>1 Sign Up Lucky Spin</b> has been unlocked for you!\n\n"
-            f"🔗 <b>Your Personal Invite Link:</b>\n"
-            f"<code>{ref_link}</code>"
-        )
-        try:
-            await query.edit_message_text(
-                text=success_text,
-                parse_mode="HTML",
-                reply_markup=build_success_keyboard(referrer_id),
-            )
-        except BadRequest as e:
-            if "Message is not modified" not in str(e):
-                logger.warning(f"edit_message_text notice: {e}")
-    else:
-        # Native alert modal listing missing channels - NO APP LINK GIVEN
-        ch_list = "\n• ".join([c.get("name") or str(c.get("id")) for c in missing_channels])
-        await query.answer(
-            f"❌ You have not joined all channels yet!\n\nPlease join:\n• {ch_list}\n\nThen tap Verify again.",
-            show_alert=True,
-        )
-
-
-verify_join = check_membership
 
 
 async def check_spins(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1100,7 +1031,7 @@ async def check_spins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def owner_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     /ownerhelp command:
-    ONLY works if user's ID or username is registered in DEFAULT_OWNERS or Firebase!
+    Comprehensive owner manual and quick interactive buttons.
     """
     if not update.effective_user or not update.message:
         return
@@ -1144,8 +1075,8 @@ async def owner_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "━━━━━━━━━━━━━━━━━━━━\n"
         "💳 <b>FINANCE & BROADCAST:</b>\n"
         "• <code>/withdrawals</code> - <i>Pending withdrawal requests</i>\n"
-        "• <code>/clearwithdrawals</code> - <i>Permanently wipe all withdrawals to keep database clean</i>\n"
-        "• <code>/broadcast &lt;message&gt;</code> - <i>Send notice to all users</i>\n\n"
+        "• <code>/clearwithdrawals</code> - <i>Permanently wipe all withdrawals</i>\n"
+        "• <code>/broadcast &lt;message&gt;</code> - <i>Send announcement to all users</i>\n\n"
         f"📊 <b>Active Channels:</b> {len(channels)} | <b>Owners:</b> {len(owners)}"
     )
 
@@ -1180,7 +1111,6 @@ async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     arg0 = context.args[0].strip()
 
-    # Check if this is a Private Channel with ID (-100...)
     if arg0.startswith("-100") or (arg0.startswith("-") and arg0[1:].isdigit()):
         channel_id = arg0
         if len(context.args) < 2:
@@ -1194,7 +1124,6 @@ async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         title = " ".join(context.args[2:]).strip() if len(context.args) > 2 else f"Private Channel {channel_id}"
         is_private = True
     else:
-        # Public Channel: handle @username or https://t.me/username
         match = re.search(r"t\.me/([a-zA-Z0-9_]+)", arg0)
         if match:
             uname = match.group(1)
@@ -1209,7 +1138,6 @@ async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     status_msg = await update.message.reply_text(f"🔄 Checking access to {channel_id}...")
 
-    # Verify if bot can access the chat
     try:
         target_chat = int(channel_id) if is_private else channel_id
         chat = await context.bot.get_chat(chat_id=target_chat)
@@ -1232,7 +1160,6 @@ async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     success = save_channel_to_db(channel_info)
 
     if success:
-        # Also update web settings if it's the primary channel
         if not is_private:
             try:
                 req = urllib.request.Request(
@@ -1262,7 +1189,7 @@ async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def remove_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     /removechannel <@channel_username or id>
-    Removes a channel from mandatory verification.
+    Permanently deletes a channel from mandatory verification.
     """
     if not update.effective_user or not update.message:
         return
@@ -1293,7 +1220,10 @@ async def remove_channel_command(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def list_channels_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/channels command: Lists all mandatory verification channels (Public & Private)."""
+    """
+    /channels command:
+    Displays all mandatory channels with clickable links.
+    """
     if not update.effective_user or not update.message:
         return
 
@@ -1322,7 +1252,10 @@ async def list_channels_command(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def add_owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/addowner <user_id or @username>"""
+    """
+    /addowner <user_id or @username>
+    Adds a new owner dynamically.
+    """
     if not update.effective_user or not update.message:
         return
 
@@ -1341,7 +1274,10 @@ async def add_owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def del_owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/delowner <user_id or @username>"""
+    """
+    /delowner <user_id or @username>
+    Removes an owner dynamically.
+    """
     if not update.effective_user or not update.message:
         return
 
@@ -1360,7 +1296,10 @@ async def del_owner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def list_owners_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/owners command to list all authorized owners."""
+    """
+    /owners command:
+    Lists all authorized owners.
+    """
     if not update.effective_user or not update.message:
         return
 
@@ -1378,7 +1317,7 @@ async def list_owners_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def check_withdrawals(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command /withdrawals or /payouts to check pending requests in Telegram chat."""
+    """Admin command /withdrawals or /payouts."""
     if not update.effective_user or not update.message:
         return
 
@@ -1423,7 +1362,7 @@ async def check_withdrawals(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def clear_withdrawals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Owner command /clearwithdrawals to permanently wipe all withdrawal records from Firebase."""
+    """Owner command /clearwithdrawals to wipe all withdrawal records."""
     if not update.effective_user or not update.message:
         return
 
@@ -1443,7 +1382,10 @@ async def clear_withdrawals_command(update: Update, context: ContextTypes.DEFAUL
 
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/broadcast <message> - Owner command to send notification to users."""
+    """
+    /broadcast <message>
+    Sends ONLY the announcement message (No mini app link attached).
+    """
     if not update.effective_user or not update.message:
         return
 
@@ -1593,6 +1535,7 @@ def main():
     # Callback Query Handlers
     app.add_handler(CallbackQueryHandler(claim_callback, pattern=r"^claim_"))
     app.add_handler(CallbackQueryHandler(done_callback, pattern=r"^(done_|verify_|check_)"))
+    app.add_handler(CallbackQueryHandler(device_blocked_done_callback, pattern=r"^device_blocked_done$"))
     app.add_handler(CallbackQueryHandler(owner_callback_router, pattern=r"^owner_"))
 
     # Chat Join Request Handler (For Private Channels - Request Sent)

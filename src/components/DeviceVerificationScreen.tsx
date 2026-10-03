@@ -73,12 +73,8 @@ export function DeviceVerificationScreen({
       }
     }
 
-    // 3. Close the mini app so user is back in Telegram bot chat
-    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.close) {
-      (window as any).Telegram.WebApp.close();
-    } else {
-      onContinue();
-    }
+    // 3. Open website / continue directly to app
+    onContinue();
   };
 
   const handleDoneBlocked = async () => {
@@ -355,13 +351,15 @@ export function DeviceVerificationScreen({
               </div>
             </div>
 
-            {/* Action Button: Done (replaces Open Cash Rocket) */}
+            {/* Action Button: Open Website / App */}
             <button
               onClick={handleDoneSuccess}
-              className="w-full py-4 rounded-2xl bg-[#0084ff] hover:bg-[#0072de] active:scale-[0.98] text-white font-['Outfit'] font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#0084ff] to-[#00a8ff] hover:from-[#0072de] hover:to-[#0096e6] active:scale-[0.98] text-white font-['Outfit'] font-black text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
             >
-              <Check className="w-5 h-5 stroke-[3]" />
-              <span>Done</span>
+              <span>Open</span>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
             </button>
           </>
         )}
