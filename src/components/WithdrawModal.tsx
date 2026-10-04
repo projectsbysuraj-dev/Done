@@ -39,10 +39,11 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
 
     const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount < settings.minWithdrawalLimit) {
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0 || numAmount < settings.minWithdrawalLimit) {
       setError(`Minimum withdrawal amount is ₹${settings.minWithdrawalLimit}`);
       triggerHaptic('error');
       return;

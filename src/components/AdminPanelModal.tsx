@@ -809,9 +809,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <strong className="text-xs font-bold text-slate-800 block">
                         {u.name} {u.id === currentUser.id ? '(You)' : ''}
                       </strong>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        ID: #{u.id} • Spins: <strong className="text-sky-600">{u.spins}</strong> • Balance: <strong className="text-emerald-600">₹{u.balance}</strong>
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(u.id, `modal_user_id_${u.id}`)}
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                            copiedItemKey === `modal_user_id_${u.id}`
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                          } cursor-pointer active:scale-95`}
+                          title="Click to copy User ID"
+                        >
+                          <span>#{u.id}</span>
+                          {copiedItemKey === `modal_user_id_${u.id}` ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5 text-slate-500" />
+                          )}
+                        </button>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          • Spins: <strong className="text-sky-600">{u.spins}</strong> • Balance: <strong className="text-emerald-600">₹{u.balance}</strong>
+                        </span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button

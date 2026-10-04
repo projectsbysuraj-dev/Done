@@ -9,7 +9,7 @@ import {
   getStoredSettings,
   getStoredTheme,
   subscribeRealtime,
-  processReferralJoin,
+  recordPendingReferral,
   syncUserWithRemote,
 } from './services/store';
 import { initTelegramApp, getTelegramReferralParam } from './services/telegram';
@@ -81,7 +81,7 @@ export default function App() {
       try {
         const refParam = getTelegramReferralParam();
         if (refParam) {
-          processReferralJoin(refParam, u.id);
+          recordPendingReferral(refParam, u.id);
         }
       } catch (e) {
         console.warn('Referral check notice:', e);

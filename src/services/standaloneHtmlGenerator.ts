@@ -679,6 +679,13 @@ export function generateStandaloneHtml(): string {
             </div>
             <span class="text-slate-400 text-sm">›</span>
           </button>
+          <button onclick="window.open('https://t.me/Rohit79041', '_blank')" class="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50 rounded-2xl">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-slate-700">🆘 Any problem dm kro</span>
+              <span class="text-[11px] font-semibold text-amber-600">@Rohit79041</span>
+            </div>
+            <span class="text-slate-400 text-sm">›</span>
+          </button>
           <button onclick="promptAdminPin()" class="w-full p-3.5 flex items-center justify-between text-left bg-emerald-50/70 hover:bg-emerald-100/70 rounded-2xl transition-all">
             <span class="text-xs font-black text-emerald-800 flex items-center gap-1.5">
               <span>🛡️ Admin Control Panel</span>

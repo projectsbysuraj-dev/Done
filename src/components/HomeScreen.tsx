@@ -8,6 +8,7 @@ import {
   decrementUserSpin,
   addBalanceToUser,
   addTransaction,
+  creditReferralAfterFirstSpin,
 } from '../services/store';
 import { triggerHaptic, openExternalOrTelegramLink } from '../services/telegram';
 
@@ -42,9 +43,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ user, settings, onNaviga
       return;
     }
 
+    const decremented = decrementUserSpin(user.id);
+    if (!decremented) {
+      triggerHaptic('error');
+      setNoSpinsModal(true);
+      return;
+    }
+
     triggerHaptic('heavy');
     setIsSpinning(true);
-    decrementUserSpin(user.id);
 
     // Guaranteed Win Logic: ALWAYS strictly spinWinAmount (default ₹5) every single spin!
     const winAmount = settings.spinWinAmount || 5;
@@ -76,6 +83,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ user, settings, onNaviga
         description: `Won ₹${winAmount} in Lucky Spin!`,
         status: 'completed',
       });
+
+      // Award +1 spin to referrer ONLY when this user completes their first spin!
+      creditReferralAfterFirstSpin(user.id);
 
       // Confetti burst
       try {

@@ -835,8 +835,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </span>
                       </div>
 
-                      <div className="text-xs text-slate-300">
-                        <strong className="text-white">{item.userName}</strong> (User #{item.userId})
+                      <div className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                        <strong className="text-white">{item.userName}</strong>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(item.userId, `withdrawal_uid_${item.id}`)}
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                            copiedItemKey === `withdrawal_uid_${item.id}`
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                              : 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700 hover:border-slate-600'
+                          } cursor-pointer active:scale-95`}
+                          title="Click to copy User ID"
+                        >
+                          <span>User #{item.userId}</span>
+                          {copiedItemKey === `withdrawal_uid_${item.id}` ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5 text-slate-400" />
+                          )}
+                        </button>
                       </div>
 
                       {item.method === 'upi' ? (
@@ -1039,7 +1056,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </div>
                         <div>
                           <strong className="text-white text-sm block leading-tight">{u.name}</strong>
-                          <span className="text-xs text-slate-400 font-mono">@{u.username} (#{u.id})</span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-xs text-slate-400 font-mono">@{u.username}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(u.id, `portal_user_${u.id}`)}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                                copiedItemKey === `portal_user_${u.id}`
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700 hover:border-slate-600'
+                              } cursor-pointer active:scale-95`}
+                              title="Click to copy User ID"
+                            >
+                              <span>#{u.id}</span>
+                              {copiedItemKey === `portal_user_${u.id}` ? (
+                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-2.5 h-2.5 text-slate-400" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2.5 py-0.5 rounded-full">

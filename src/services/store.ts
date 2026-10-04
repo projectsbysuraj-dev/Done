@@ -772,7 +772,39 @@ export function saveTransactions(list: Transaction[]): void {
 }
 
 export function getUserTransactions(userId: string): Transaction[] {
-  return getAllTransactions().filter(t => t.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
+  const cleanId = String(userId).trim();
+  const currentUser = getCurrentUser();
+  const altId = currentUser.telegramId ? String(currentUser.telegramId).trim() : cleanId;
+
+  return getAllTransactions()
+    .filter(t => {
+      const txUserId = String(t.userId).trim();
+      return txUserId === cleanId || txUserId === altId;
+    })
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export async function refreshTransactionsFromRemote(): Promise<Transaction[]> {
+  try {
+    const resp = await fetch('https://telebot-26c11-default-rtdb.firebaseio.com/transactions.json', {
+      cache: 'no-store',
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      let remoteArr: Transaction[] = [];
+      if (data && typeof data === 'object') {
+        remoteArr = (Object.values(data) as Transaction[]).filter(
+          (x) => x && typeof x === 'object' && x.id && typeof x.createdAt === 'number'
+        );
+      }
+      remoteArr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      saveTransactions(remoteArr);
+      return remoteArr;
+    }
+  } catch (e) {
+    console.warn('Error fetching remote transactions:', e);
+  }
+  return getAllTransactions();
 }
 
 export function addTransaction(data: Omit<Transaction, 'id' | 'createdAt'>): Transaction {
@@ -1255,10 +1287,13 @@ export async function clearAllWithdrawalsPermanent(): Promise<boolean> {
 
 // ----------------- Real Referral System with Data Fetch -----------------
 
-export function processReferralJoin(referrerId: string, visitorId?: string): { success: boolean; message: string } {
+/**
+ * Records that the current user was referred by referrerId.
+ * IMPORTANT: DOES NOT credit any spin! Spin is ONLY awarded after the user actually plays their first spin.
+ */
+export function recordPendingReferral(referrerId: string, visitorId?: string): { success: boolean; message: string } {
   if (!referrerId) return { success: false, message: 'Invalid referrer ID' };
 
-  // Normalize referrerId (handle ref_123, ref-123, ref123, url-encoded, etc.)
   let cleanReferrerId = '';
   try {
     cleanReferrerId = decodeURIComponent(referrerId).trim();
@@ -1273,120 +1308,207 @@ export function processReferralJoin(referrerId: string, visitorId?: string): { s
     .trim();
 
   if (!cleanReferrerId) {
-    return { success: false, message: 'Empty referrer ID after parsing' };
+    return { success: false, message: 'Empty referrer ID' };
   }
 
   const currentUserId = String(visitorId || getCurrentUser().id).trim();
-
-  // ANTI-FRAUD / ANTI-ACCOUNT SWITCH CHECK:
-  // Ensure this phone is not already bound to a different Telegram ID
-  if (typeof window !== 'undefined') {
-    const boundLocalId = localStorage.getItem('rg_bound_telegram_id_v1');
-    if (boundLocalId && boundLocalId !== currentUserId) {
-      console.warn(`Referral blocked: Phone already bound to ID ${boundLocalId}, current is ${currentUserId}`);
-      return { success: false, message: 'Multi-account fraud blocked on this device' };
-    }
-    // Bind this phone to the verified account
-    localStorage.setItem('rg_bound_telegram_id_v1', currentUserId);
-  }
 
   if (cleanReferrerId === currentUserId) {
     return { success: false, message: 'Self referral is not allowed' };
   }
 
-  const processedKey = `rg_ref_processed_${cleanReferrerId}_${currentUserId}`;
-  if (typeof window !== 'undefined' && localStorage.getItem(processedKey)) {
-    return { success: false, message: 'Referral already credited' };
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('rg_pending_referrer_id', cleanReferrerId);
   }
 
   const users = getAllUsers();
-  const referrer = users.find(u => u.id === cleanReferrerId || u.telegramId === cleanReferrerId);
-
-  if (!referrer) {
-    // If referrer is not in local cache yet (cross-device), fetch and credit in Firebase Realtime Database
-    const db = rtdb;
-    if (db) {
-      get(ref(db, `users/${cleanReferrerId}`)).then((snapshot) => {
-        let remoteUser: UserProfile;
-        if (snapshot.exists()) {
-          remoteUser = snapshot.val() as UserProfile;
-          remoteUser.friendsJoined = (remoteUser.friendsJoined || 0) + 1;
-          remoteUser.spins = (remoteUser.spins || 0) + 1;
-          remoteUser.spinsEarned = (remoteUser.spinsEarned || 0) + 1;
-        } else {
-          remoteUser = {
-            id: cleanReferrerId,
-            telegramId: cleanReferrerId,
-            name: `User #${cleanReferrerId.slice(-4)}`,
-            username: `user_${cleanReferrerId.slice(-4)}`,
-            balance: 0,
-            spins: 2, // 1 signup bonus + 1 referral spin
-            friendsJoined: 1,
-            spinsEarned: 2,
-            createdAt: Date.now(),
-            isVerified: true,
-            claimedWelcomeSpin: true,
-          };
-        }
-        set(ref(db, `users/${cleanReferrerId}`), remoteUser).catch(() => {});
-        set(ref(db, `referrals/${cleanReferrerId}/${currentUserId}`), {
-          joinerId: currentUserId,
-          timestamp: Date.now(),
-        }).catch(() => {});
-
-        // Record transaction in Firebase
-        const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        set(ref(db, `transactions/${txId}`), {
-          id: txId,
-          userId: cleanReferrerId,
-          type: 'referral_bonus',
-          amount: 0,
-          description: `Friend #${currentUserId.slice(-4)} joined! +1 Lucky Spin awarded`,
-          status: 'completed',
-          createdAt: Date.now(),
-        }).catch(() => {});
-      }).catch((e) => {
-        console.warn('Firebase remote referral join notice:', e);
-      });
-    }
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(processedKey, 'true');
-      sessionStorage.removeItem('rg_pending_ref_code');
-    }
-    return { success: true, message: 'Referral processed in Firebase!' };
+  const user = users.find(u => u.id === currentUserId || u.telegramId === currentUserId);
+  if (user && !user.referredBy) {
+    user.referredBy = cleanReferrerId;
+    saveUsers(users);
   }
 
-  // Award +1 spin and increment friendsJoined
-  referrer.friendsJoined = (referrer.friendsJoined || 0) + 1;
-  referrer.spins = (referrer.spins || 0) + 1;
-  referrer.spinsEarned = (referrer.spinsEarned || 0) + 1;
-
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(processedKey, 'true');
-    sessionStorage.removeItem('rg_pending_ref_code');
-  }
-
-  saveUsers(users);
-
-  addTransaction({
-    userId: referrer.id,
-    type: 'referral_bonus',
-    amount: 0,
-    description: `Friend #${currentUserId.slice(-4)} joined! +1 Lucky Spin awarded`,
-    status: 'completed',
-  });
-
-  if (rtdb) {
-    set(ref(rtdb, `users/${referrer.id}`), referrer).catch(() => {});
-    set(ref(rtdb, `referrals/${referrer.id}/${currentUserId}`), {
-      joinerId: currentUserId,
-      timestamp: Date.now(),
+  if (rtdb && currentUserId) {
+    update(ref(rtdb, `users/${currentUserId}`), {
+      referredBy: cleanReferrerId,
     }).catch(() => {});
   }
 
-  notifySubscribers('referral_joined');
-  return { success: true, message: '+1 Spin credited to referrer!' };
+  return { success: true, message: 'Referrer recorded. Spin will unlock after first spin!' };
+}
+
+/**
+ * Backward compatibility alias
+ */
+export function processReferralJoin(referrerId: string, visitorId?: string): { success: boolean; message: string } {
+  return recordPendingReferral(referrerId, visitorId);
+}
+
+/**
+ * CRITICAL ANTI-GLITCH REFERRAL SYSTEM:
+ * Referrer gets +1 Spin ONLY after the referred user completes their first Lucky Spin!
+ * Simply clicking /start, restarting bot, or viewing page gives 0 spins.
+ */
+export async function creditReferralAfterFirstSpin(currentUserId: string): Promise<boolean> {
+  const cleanCurrentId = String(currentUserId).trim();
+  if (!cleanCurrentId) return false;
+
+  const processedKey = `rg_ref_spin_awarded_${cleanCurrentId}`;
+  if (typeof window !== 'undefined' && localStorage.getItem(processedKey)) {
+    return false; // Already awarded for this user
+  }
+
+  let referredBy: string | null = null;
+  let userName = 'Friend';
+  let userUsername = '';
+
+  // 1. Check local user profile
+  const users = getAllUsers();
+  const user = users.find(u => u.id === cleanCurrentId || u.telegramId === cleanCurrentId);
+  if (user) {
+    if (user.referralRewardGiven) {
+      if (typeof window !== 'undefined') localStorage.setItem(processedKey, 'true');
+      return false;
+    }
+    referredBy = user.referredBy || null;
+    userName = user.name || userName;
+    userUsername = user.username || userUsername;
+  }
+
+  // 2. Check RTDB
+  if (rtdb && cleanCurrentId) {
+    try {
+      const snap = await get(ref(rtdb, `users/${cleanCurrentId}`));
+      if (snap.exists()) {
+        const val = snap.val();
+        if (val.referralRewardGiven) {
+          if (typeof window !== 'undefined') localStorage.setItem(processedKey, 'true');
+          return false;
+        }
+        if (!referredBy && val.referredBy) {
+          referredBy = val.referredBy;
+        }
+        userName = val.name || userName;
+        userUsername = val.username || userUsername;
+      }
+    } catch (e) {
+      console.warn('Notice checking RTDB for referrer:', e);
+    }
+  }
+
+  // 3. Check localStorage fallback
+  if (!referredBy && typeof window !== 'undefined') {
+    referredBy = localStorage.getItem('rg_pending_referrer_id') || sessionStorage.getItem('rg_pending_ref_code');
+  }
+
+  if (!referredBy) return false;
+
+  referredBy = String(referredBy)
+    .replace(/^ref_/i, '')
+    .replace(/^ref-/i, '')
+    .trim();
+
+  if (!referredBy || referredBy === cleanCurrentId) return false;
+
+  // Mark as awarded immediately to prevent race conditions
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(processedKey, 'true');
+  }
+  if (user) {
+    user.referralRewardGiven = true;
+    saveUsers(users);
+  }
+
+  if (rtdb && cleanCurrentId) {
+    update(ref(rtdb, `users/${cleanCurrentId}`), {
+      referralRewardGiven: true,
+      referralCompletedAt: Date.now(),
+    }).catch(() => {});
+  }
+
+  // Award +1 Spin & Friend to the Referrer in Firebase RTDB
+  let referrerSpins = 2;
+  if (rtdb) {
+    try {
+      const refSnap = await get(ref(rtdb, `users/${referredBy}`));
+      if (refSnap.exists()) {
+        const refVal = refSnap.val();
+        referrerSpins = (refVal.spins || 0) + 1;
+        const newFriends = (refVal.friendsJoined || 0) + 1;
+        const newEarned = (refVal.spinsEarned || 0) + 1;
+
+        await update(ref(rtdb, `users/${referredBy}`), {
+          spins: referrerSpins,
+          friendsJoined: newFriends,
+          spinsEarned: newEarned,
+        });
+      } else {
+        await set(ref(rtdb, `users/${referredBy}`), {
+          id: referredBy,
+          telegramId: referredBy,
+          name: `User #${referredBy.slice(-4)}`,
+          spins: 2,
+          friendsJoined: 1,
+          spinsEarned: 2,
+          balance: 0,
+          createdAt: Date.now(),
+          isVerified: true,
+        });
+      }
+
+      // Record transaction
+      const txId = `tx_${Date.now()}_ref`;
+      await set(ref(rtdb, `transactions/${txId}`), {
+        id: txId,
+        userId: referredBy,
+        type: 'referral_bonus',
+        amount: 0,
+        description: `Friend ${userName} completed their first spin! +1 Lucky Spin awarded`,
+        status: 'completed',
+        createdAt: Date.now(),
+      });
+
+      // Save referral log
+      await set(ref(rtdb, `referrals/${referredBy}/${cleanCurrentId}`), {
+        joinerId: cleanCurrentId,
+        name: userName,
+        username: userUsername,
+        timestamp: Date.now(),
+        status: 'completed_first_spin',
+      });
+    } catch (e) {
+      console.warn('Error crediting referrer in RTDB:', e);
+    }
+  }
+
+  // Send Telegram Notification to Referrer
+  if (referredBy.match(/^\d+$/)) {
+    const botTokens = [
+      '8973201055:AAGiHa1ewSL0F_mG0v_f1WpMqK2lRySxSko',
+      '8639853090:AAGSrArc6Xtm5309WpZeGih1H7evsvJstWE',
+    ];
+    const alertText = `🎉 <b>New Referral Completed First Spin!</b>\n\n👤 <b>${userName}</b> has completed all steps and made their first Lucky Spin!\n\n🎁 <b>+1 Free Lucky Spin</b> has been credited to your account!\n🎡 Available Spins: <b>${referrerSpins}</b>\n\nApp kholo aur spin karke cash jeeto! 🎡`;
+
+    for (const token of botTokens) {
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: Number(referredBy),
+            text: alertText,
+            parse_mode: 'HTML',
+          }),
+        });
+        break;
+      } catch (e) {
+        // Continue to fallback token if any error
+      }
+    }
+  }
+
+  notifySubscribers('referral_completed');
+  return true;
 }
 
 export function getReferralTransactions(userId: string): Transaction[] {

@@ -15,6 +15,7 @@ import {
   getUserTransactions,
   getUserWithdrawals,
   refreshWithdrawalsFromRemote,
+  refreshTransactionsFromRemote,
   subscribeRealtime,
   addBalanceToUser,
 } from '../services/store';
@@ -41,6 +42,8 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ user, settings, onNa
     // 1. Initial live fetch from Firebase RTDB
     refreshWithdrawalsFromRemote().then(() => {
       setWithdrawals(getUserWithdrawals(user.id));
+    });
+    refreshTransactionsFromRemote().then(() => {
       setTransactions(getUserTransactions(user.id));
     });
 
@@ -54,6 +57,9 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ user, settings, onNa
     const interval = setInterval(() => {
       refreshWithdrawalsFromRemote().then(() => {
         setWithdrawals(getUserWithdrawals(user.id));
+      });
+      refreshTransactionsFromRemote().then(() => {
+        setTransactions(getUserTransactions(user.id));
       });
     }, 4000);
 
@@ -480,10 +486,16 @@ export const WalletScreen: React.FC<WalletScreenProps> = ({ user, settings, onNa
                   <div className="text-right">
                     <span
                       className={`font-['Outfit'] font-black text-sm block ${
-                        tx.amount > 0 ? 'text-emerald-600' : 'text-slate-800'
+                        tx.type === 'referral_bonus'
+                          ? 'text-sky-600'
+                          : tx.amount > 0
+                          ? 'text-emerald-600'
+                          : 'text-rose-600'
                       }`}
                     >
-                      {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toFixed(2)}
+                      {tx.type === 'referral_bonus'
+                        ? '+1 SPIN'
+                        : `${tx.amount > 0 ? '+' : '-'}₹${Math.abs(tx.amount).toFixed(2)}`}
                     </span>
                   </div>
                 </div>

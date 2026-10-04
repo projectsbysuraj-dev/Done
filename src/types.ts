@@ -11,6 +11,8 @@ export interface UserProfile {
   photoUrl?: string;
   isVerified?: boolean;
   claimedWelcomeSpin?: boolean;
+  referredBy?: string;
+  referralRewardGiven?: boolean;
 }
 
 export type WithdrawalMethod = 'upi' | 'bank';
@@ -29,6 +31,8 @@ export interface WithdrawalRequest {
   ifsc?: string;
   status: WithdrawalStatus;
   rejectReason?: string;
+  utr?: string;
+  processedAt?: number;
   createdAt: number;
   updatedAt?: number;
 }
@@ -60,6 +64,7 @@ export interface AppSettings {
   adminPin: string;
   adminEmail?: string;
   adminPassword?: string;
+  autoWithdrawal?: boolean; // When true, withdrawals are automatically processed & approved instantly
   firebaseConfig?: {
     apiKey?: string;
     databaseURL?: string;

@@ -122,6 +122,21 @@ def get_user_from_db(user_id: str) -> dict | None:
     return None
 
 
+def update_user_in_db(user_id: str, patch_data: dict):
+    """Update user fields in Firebase RTDB."""
+    try:
+        req = urllib.request.Request(
+            f"{RTDB_URL}/users/{user_id}.json",
+            data=json.dumps(patch_data).encode("utf-8"),
+            method="PATCH",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+    except Exception as e:
+        logger.warning(f"Error updating user {user_id}: {e}")
+
+
 def is_already_referred(referrer_id: str, new_user_id: str) -> bool:
     """Check if this new user has already been credited to the referrer."""
     try:
@@ -693,6 +708,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw_arg = context.args[0]
         referrer_id = raw_arg.replace("ref_", "").strip()
 
+    # Track referrer relationship in DB WITHOUT awarding any spin!
+    # Spin is strictly awarded ONLY after the user actually plays their first spin in the app.
+    if referrer_id and str(referrer_id) != str(user_id):
+        existing_u = get_user_from_db(str(user_id))
+        if existing_u:
+            if not existing_u.get("referredBy"):
+                update_user_in_db(str(user_id), {"referredBy": referrer_id})
+        else:
+            now_ms = int(time.time() * 1000)
+            new_u_data = {
+                "id": str(user_id),
+                "telegramId": str(user_id),
+                "name": first_name,
+                "username": username or "",
+                "balance": 0,
+                "spins": 1,
+                "friendsJoined": 0,
+                "spinsEarned": 1,
+                "createdAt": now_ms,
+                "isVerified": False,
+                "referredBy": referrer_id,
+            }
+            try:
+                req = urllib.request.Request(
+                    f"{RTDB_URL}/users/{user_id}.json",
+                    data=json.dumps(new_u_data).encode("utf-8"),
+                    method="PUT",
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+            except Exception:
+                pass
+
     channels = load_channels_from_db()
     all_joined, missing_channels = await check_user_channels_membership(context.bot, user_id)
 
@@ -709,16 +758,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if db_user and (db_user.get("deviceVerified") or db_user.get("isVerified")):
-            # Already verified -> Show Congratulations message directly
-            if referrer_id:
-                await process_and_notify_referral(
-                    context.bot,
-                    referrer_id,
-                    user_id,
-                    first_name,
-                    username,
-                )
-
+            # NO referral spin on /start or restart!
+            # Spin is strictly awarded ONLY after the user actually plays their first spin in the app.
             success_text = (
                 f"🎉 <b>Congratulations {first_name}</b>\n\n"
                 "Aap successfully verify ho gaye ho ✅\n\n"
@@ -910,19 +951,10 @@ async def device_blocked_done_callback(update: Update, context: ContextTypes.DEF
 
 async def complete_verification(query, context, user_id, first_name, username, referrer_id):
     """
-    Sends Congratulations & Open button,
-    and awards referrer instant spin & notification.
+    Sends Congratulations & Open button.
+    Referral spin is strictly awarded ONLY after the user plays their first spin in the app!
     """
     await query.answer("✅ Verification Successful!", show_alert=False)
-
-    if referrer_id:
-        await process_and_notify_referral(
-            context.bot,
-            referrer_id,
-            user_id,
-            first_name,
-            username,
-        )
 
     success_text = (
         f"🎉 <b>Congratulations {first_name}</b>\n\n"
@@ -963,6 +995,12 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     db_user = get_user_from_db(str(user_id))
+    if db_user and db_user.get("deviceBlocked"):
+        await update.message.reply_html(
+            "❌ <b>Access Blocked!</b>\n\nEk device me sirf 1 account chal sakta hai. Multi-account misuse prohibited hai! 🚫"
+        )
+        return
+
     spins = db_user.get("spins", 1) if db_user else 1
     friends = db_user.get("friendsJoined", 0) if db_user else 0
 
@@ -1002,6 +1040,12 @@ async def check_spins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     db_user = get_user_from_db(user_id)
+    if db_user and db_user.get("deviceBlocked"):
+        await update.message.reply_html(
+            "❌ <b>Access Blocked!</b>\n\nEk device me sirf 1 account chal sakta hai. Multi-account misuse prohibited hai! 🚫"
+        )
+        return
+
     if db_user:
         spins = db_user.get("spins", 0)
         friends = db_user.get("friendsJoined", 0)

@@ -15,6 +15,43 @@ const BOUND_TELEGRAM_ID_KEY = 'rg_bound_telegram_id_v1';
 const BOT_TOKEN = '8639853090:AAGSrArc6Xtm5309WpZeGih1H7evsvJstWE';
 const MINI_APP_URL = 'https://cashback-psi-fawn.vercel.app/';
 
+function getHardwareFingerprint(): string {
+  try {
+    const parts = [
+      typeof screen !== 'undefined' ? `${screen.width}x${screen.height}x${screen.colorDepth}` : '',
+      typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 0 : '',
+      typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || '' : '',
+      typeof navigator !== 'undefined' ? navigator.language || '' : '',
+      typeof navigator !== 'undefined' ? navigator.platform || '' : '',
+    ];
+
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 160;
+      canvas.height = 40;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(10, 5, 60, 20);
+        ctx.fillStyle = '#069';
+        ctx.fillText('telebot_device_v1', 12, 10);
+        parts.push(canvas.toDataURL().slice(-40));
+      }
+    }
+
+    const str = parts.join('###');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    return 'hw_' + Math.abs(hash).toString(36);
+  } catch {
+    return 'hw_fallback';
+  }
+}
+
 export function DeviceVerificationScreen({
   user,
   referrerId,
@@ -151,30 +188,58 @@ export function DeviceVerificationScreen({
       return;
     }
 
-    // CHECK B: Double-check with Firebase RTDB device bindings
-    if (rtdb && localDeviceId) {
-      get(ref(rtdb, `devices/${localDeviceId}`))
-        .then((snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.val();
-            const boundId = String(data.boundTelegramId || '').trim();
+    // CHECK B: Double-check with Firebase RTDB device & hardware bindings
+    const hwFingerprint = getHardwareFingerprint();
 
+    if (rtdb) {
+      // Check both localDeviceId and persistent hardware fingerprint
+      Promise.all([
+        localDeviceId ? get(ref(rtdb, `devices/${localDeviceId}`)) : Promise.resolve(null),
+        hwFingerprint ? get(ref(rtdb, `hardware_fingerprints/${hwFingerprint}`)) : Promise.resolve(null),
+      ])
+        .then(([deviceSnap, hwSnap]) => {
+          let conflictId: string | null = null;
+
+          if (deviceSnap && deviceSnap.exists()) {
+            const data = deviceSnap.val();
+            const boundId = String(data.boundTelegramId || '').trim();
             if (boundId && boundId !== currentTelegramId) {
-              localStorage.setItem(BOUND_TELEGRAM_ID_KEY, boundId);
-              setStatus('blocked');
-              setBlockedDetails({ originalId: boundId });
-              return;
+              conflictId = boundId;
             }
           }
 
-          // CLEAN DEVICE: Bind this phone to the current Telegram account permanently
+          if (!conflictId && hwSnap && hwSnap.exists()) {
+            const data = hwSnap.val();
+            const boundId = String(data.boundTelegramId || '').trim();
+            if (boundId && boundId !== currentTelegramId) {
+              conflictId = boundId;
+            }
+          }
+
+          if (conflictId) {
+            localStorage.setItem(BOUND_TELEGRAM_ID_KEY, conflictId);
+            setStatus('blocked');
+            setBlockedDetails({ originalId: conflictId });
+            return;
+          }
+
+          // CLEAN DEVICE: Bind this phone and hardware permanently
           localStorage.setItem(BOUND_TELEGRAM_ID_KEY, currentTelegramId);
+
           if (rtdb && localDeviceId) {
             set(ref(rtdb, `devices/${localDeviceId}`), {
               boundTelegramId: currentTelegramId,
               boundName: user.name || 'User',
               firstVerifiedAt: Date.now(),
-              deviceFingerprint: navigator.userAgent.slice(0, 80),
+              hwFingerprint,
+            }).catch(() => {});
+          }
+
+          if (rtdb && hwFingerprint) {
+            set(ref(rtdb, `hardware_fingerprints/${hwFingerprint}`), {
+              boundTelegramId: currentTelegramId,
+              boundName: user.name || 'User',
+              firstVerifiedAt: Date.now(),
             }).catch(() => {});
           }
 
